@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VanaVaidya — AI Medicinal Plant Finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Mono:wght@300;400;500&family=Nunito+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- Leaflet Map -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0f1a0f;--surface:#162016;--card:#1c2c1c;--card2:#1a281a;
+  --border:rgba(120,170,90,0.18);--borderh:rgba(120,170,90,0.42);
+  --forest:#2e4a28;--sage:#5a7a48;--fern:#88b060;--leaf:#b4d490;--mist:#dff0c8;
+  --gold:#c9a84c;--amber:#e4b84a;--rust:#c4502a;
+  --white:#f4f1eb;--muted:rgba(244,241,235,0.5);--dim:rgba(244,241,235,0.22);
+  --r:18px;--rbtn:12px;
+}
+html{scroll-behavior:smooth}
+body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--white);min-height:100vh;overflow-x:hidden}
+
+/* BG */
+.bg-glow{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 60% 50% at 15% 15%,rgba(88,130,60,.12) 0%,transparent 70%),
+             radial-gradient(ellipse 50% 60% at 85% 85%,rgba(46,74,40,.18) 0%,transparent 70%)}
+.bg-grid{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(88,130,60,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(88,130,60,.03) 1px,transparent 1px);
+  background-size:40px 40px}
+
+/* HEADER */
+header{position:relative;z-index:20;display:flex;align-items:center;justify-content:space-between;
+  padding:20px 40px;border-bottom:1px solid var(--border);backdrop-filter:blur(12px);background:rgba(15,26,15,.75)}
+.logo{display:flex;align-items:center;gap:13px}
+.logo-mark{width:42px;height:42px;background:linear-gradient(140deg,var(--sage),var(--fern));border-radius:12px;
+  display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 6px 24px rgba(88,130,60,.35)}
+.logo-name{font-family:'Cormorant Garamond',serif;font-size:23px;font-weight:700;letter-spacing:-.5px}
+.logo-name span{color:var(--fern)}
+.logo-tag{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:var(--sage);margin-top:2px}
+.h-pill{display:flex;align-items:center;gap:7px;padding:7px 15px;border:1px solid var(--border);border-radius:100px;
+  font-family:'DM Mono',monospace;font-size:11px;color:var(--fern);background:rgba(88,130,60,.08)}
+.pill-dot{width:6px;height:6px;border-radius:50%;background:var(--fern);animation:blink 2.4s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* NAV TABS (top-level) */
+.nav-bar{position:relative;z-index:10;display:flex;gap:0;
+  padding:0 40px;background:rgba(15,26,15,.6);border-bottom:1px solid var(--border);backdrop-filter:blur(8px)}
+.nav-tab{padding:14px 24px;font-family:'Nunito Sans',sans-serif;font-size:14px;font-weight:600;
+  border:none;background:transparent;color:var(--muted);cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .25s;display:flex;align-items:center;gap:7px}
+.nav-tab.active{color:var(--fern);border-bottom-color:var(--fern)}
+.nav-tab:hover:not(.active){color:var(--white)}
+
+/* PAGES */
+.page{display:none;position:relative;z-index:5}
+.page.active{display:block}
+
+/* ═══════════════════════════════════════════════
+   SCANNER PAGE
+══════════════════════════════════════════════ */
+.hero{text-align:center;padding:56px 24px 40px}
+.hero-eye{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:3px;text-transform:uppercase;
+  color:var(--sage);margin-bottom:18px;opacity:0;animation:rise .8s .1s ease forwards}
+.hero h1{font-family:'Cormorant Garamond',serif;font-size:clamp(38px,6vw,72px);font-weight:700;
+  line-height:1.08;letter-spacing:-2px;margin-bottom:18px;opacity:0;animation:rise .8s .25s ease forwards}
+.hero h1 em{font-style:italic;color:var(--fern)}
+.hero-sub{font-size:15px;line-height:1.75;color:var(--muted);max-width:420px;margin:0 auto 44px;
+  opacity:0;animation:rise .8s .4s ease forwards}
+@keyframes rise{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
+
+.card-wrap{max-width:780px;margin:0 auto;padding:0 20px 60px;opacity:0;animation:rise .8s .55s ease forwards}
+.main-card{background:var(--surface);border:1px solid var(--border);border-radius:22px;overflow:hidden;
+  box-shadow:0 32px 80px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.04)}
+
+/* input tabs */
+.itabs{display:flex;gap:4px;padding:14px 18px 0;background:rgba(15,26,15,.4);border-bottom:1px solid var(--border)}
+.itab{padding:9px 20px 13px;font-size:13px;font-weight:600;border:none;border-radius:9px 9px 0 0;
+  cursor:pointer;background:transparent;color:var(--muted);transition:all .25s;
+  border-bottom:2px solid transparent;margin-bottom:-1px}
+.itab.active{color:var(--fern);background:var(--surface);border-bottom-color:var(--fern)}
+
+.panel{display:none;padding:26px 26px 18px}
+.panel.active{display:block}
+
+/* drop zone */
+.drop-zone{border:2px dashed var(--border);border-radius:var(--r);padding:48px 20px;text-align:center;
+  position:relative;cursor:pointer;transition:all .3s;background:rgba(15,26,15,.35)}
+.drop-zone:hover,.drop-zone.over{border-color:var(--fern);background:rgba(88,130,60,.07)}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-icon{font-size:50px;display:block;margin-bottom:14px}
+.drop-h{font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:600;color:var(--leaf);margin-bottom:7px}
+.drop-p{font-size:13px;color:var(--dim)}
+.drop-p a{color:var(--fern);text-decoration:none}
+.img-preview{display:none}
+.img-preview.show{display:block}
+.preview-frame{position:relative;border-radius:var(--r);overflow:hidden}
+.preview-frame img{width:100%;max-height:300px;object-fit:cover;display:block;border-radius:var(--r)}
+.prev-actions{position:absolute;top:10px;right:10px;display:flex;gap:7px}
+.prev-btn{background:rgba(15,26,15,.85);border:1px solid var(--border);border-radius:8px;
+  padding:6px 12px;font-size:12px;color:var(--white);cursor:pointer;backdrop-filter:blur(8px);transition:all .2s}
+.prev-btn:hover{background:var(--sage)}
+
+/* camera */
+.cam-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;padding:50px 20px;border:2px dashed var(--border);border-radius:var(--r);background:rgba(15,26,15,.35)}
+.cam-placeholder p{font-size:14px;color:var(--muted)}
+.start-btn{display:flex;align-items:center;gap:8px;padding:13px 26px;
+  background:linear-gradient(135deg,var(--sage),var(--fern));border:none;border-radius:var(--rbtn);
+  font-size:14px;font-weight:600;color:var(--white);cursor:pointer;transition:all .3s;
+  box-shadow:0 6px 24px rgba(88,130,60,.3)}
+.start-btn:hover{transform:translateY(-2px);box-shadow:0 10px 32px rgba(88,130,60,.45)}
+.cam-active{display:none}
+.cam-active.show{display:block}
+.cam-frame{position:relative;border-radius:var(--r);overflow:hidden;background:#000;aspect-ratio:16/9}
+#camFeed{width:100%;height:100%;object-fit:cover;display:block}
+.vf{position:absolute;inset:0;pointer-events:none}
+.vfc{position:absolute;width:26px;height:26px;border-color:var(--fern);border-style:solid;border-width:0}
+.vf-tl{top:14px;left:14px;border-top-width:2px;border-left-width:2px;border-radius:4px 0 0 0}
+.vf-tr{top:14px;right:14px;border-top-width:2px;border-right-width:2px;border-radius:0 4px 0 0}
+.vf-bl{bottom:14px;left:14px;border-bottom-width:2px;border-left-width:2px;border-radius:0 0 0 4px}
+.vf-br{bottom:14px;right:14px;border-bottom-width:2px;border-right-width:2px;border-radius:0 0 4px 0}
+.cam-controls{position:absolute;bottom:0;left:0;right:0;padding:16px;
+  background:linear-gradient(transparent,rgba(0,0,0,.7));display:flex;align-items:center;justify-content:center;gap:14px}
+.ctrl-btn{background:rgba(15,26,15,.8);border:1px solid var(--border);border-radius:9px;
+  padding:8px 14px;color:var(--white);font-size:13px;cursor:pointer;backdrop-filter:blur(8px);transition:all .2s}
+.ctrl-btn:hover{background:var(--sage)}
+.shutter{width:64px;height:64px;border-radius:50%;background:var(--white);border:4px solid rgba(255,255,255,.4);
+  cursor:pointer;font-size:24px;display:flex;align-items:center;justify-content:center;transition:all .18s;
+  box-shadow:0 4px 20px rgba(0,0,0,.4)}
+.shutter:hover{transform:scale(1.06)}
+#captureCanvas{display:none}
+
+/* analyze btn */
+.analyze-wrap{padding:16px 26px 20px;border-top:1px solid var(--border);background:rgba(15,26,15,.3)}
+.analyze-btn{width:100%;padding:16px;background:linear-gradient(135deg,var(--sage),var(--fern));
+  border:none;border-radius:var(--rbtn);font-family:'Cormorant Garamond',serif;font-size:19px;font-weight:700;
+  color:var(--white);cursor:pointer;transition:all .3s;display:flex;align-items:center;justify-content:center;gap:9px;
+  box-shadow:0 6px 28px rgba(88,130,60,.32);position:relative;overflow:hidden}
+.analyze-btn:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(88,130,60,.48)}
+.analyze-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* loading */
+.loading-section{display:none;padding:26px;border-top:1px solid var(--border)}
+.loading-section.show{display:block}
+.l-title{font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;color:var(--leaf);margin-bottom:16px}
+.steps{display:flex;flex-direction:column;gap:10px}
+.step{display:flex;align-items:center;gap:12px;font-family:'DM Mono',monospace;font-size:12px;color:var(--dim);transition:color .4s}
+.step.active{color:var(--fern)}.step.done{color:rgba(244,241,235,.5)}
+.step-node{width:24px;height:24px;border-radius:50%;border:2px solid rgba(120,170,90,.25);
+  display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;transition:all .4s}
+.step.active .step-node{border-color:var(--fern);background:rgba(88,130,60,.18);animation:rotate 1.2s linear infinite}
+.step.done .step-node{border-color:var(--fern);background:var(--sage);animation:none}
+@keyframes rotate{to{transform:rotate(360deg)}}
+.prog-track{height:3px;background:rgba(120,170,90,.12);border-radius:2px;margin-top:18px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--sage),var(--fern),var(--leaf));
+  border-radius:2px;width:0%;transition:width .6s cubic-bezier(.4,0,.2,1)}
+
+/* error */
+.error-section{display:none;padding:22px 26px;border-top:1px solid var(--border)}
+.error-section.show{display:block}
+.error-box{background:rgba(196,80,42,.1);border:1px solid rgba(196,80,42,.3);border-radius:var(--r);padding:20px;display:flex;gap:13px}
+.e-ico{font-size:26px;flex-shrink:0}
+.e-head{font-family:'Cormorant Garamond',serif;font-size:17px;color:#e88060;margin-bottom:5px}
+.e-body{font-size:13px;color:rgba(244,241,235,.6);line-height:1.65}
+
+/* results */
+.results-section{display:none}
+.results-section.show{display:block}
+.plant-header{padding:28px 26px 22px;border-top:1px solid var(--border);
+  background:linear-gradient(180deg,rgba(46,74,40,.18) 0%,transparent 100%);
+  display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.plant-cn{font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:700;line-height:1.1;color:var(--leaf);margin-bottom:5px}
+.plant-sn{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:16px;color:var(--muted);margin-bottom:6px}
+.plant-fam{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--sage)}
+.conf-badge{background:rgba(88,130,60,.15);border:1px solid rgba(120,170,90,.3);border-radius:100px;
+  padding:7px 16px;font-family:'DM Mono',monospace;font-size:11px;color:var(--fern);white-space:nowrap;flex-shrink:0;align-self:flex-start}
+.rtab-bar{display:flex;gap:2px;padding:0 26px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.rtab-bar::-webkit-scrollbar{display:none}
+.rtab{padding:11px 17px;border:none;font-size:13px;font-weight:600;cursor:pointer;background:transparent;
+  color:var(--muted);white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .25s}
+.rtab.active{color:var(--fern);border-bottom-color:var(--fern)}
+.rpanel{display:none;padding:26px}
+.rpanel.active{display:block}
+.igrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:11px;margin-bottom:14px}
+.icard{background:var(--card);border:1px solid var(--border);border-radius:13px;padding:15px;transition:border-color .2s}
+.icard:hover{border-color:var(--borderh)}
+.icard-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--sage);margin-bottom:6px}
+.icard-value{font-size:14px;color:var(--leaf);line-height:1.55}
+.blist{display:flex;flex-direction:column;gap:9px}
+.bitem{display:flex;gap:13px;background:var(--card);border:1px solid var(--border);border-radius:13px;padding:15px;transition:all .22s}
+.bitem:hover{border-color:var(--borderh);transform:translateX(3px);background:rgba(40,60,36,.7)}
+.b-icon{font-size:22px;flex-shrink:0;padding-top:2px}
+.b-title{font-size:14px;font-weight:600;color:var(--leaf);margin-bottom:4px}
+.b-desc{font-size:13px;color:var(--muted);line-height:1.65}
+.warn-box{display:flex;gap:12px;background:rgba(196,80,42,.09);border:1px solid rgba(196,80,42,.28);border-radius:13px;padding:15px;margin-top:14px}
+.warn-box .w-ico{font-size:18px;flex-shrink:0;padding-top:2px}
+.warn-box .w-body{font-size:13px;color:rgba(244,241,235,.65);line-height:1.65}
+.warn-box .w-body strong{display:block;color:#e8906a;margin-bottom:3px;font-size:13px}
+.tags{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+.tag{background:rgba(88,130,60,.18);border:1px solid rgba(120,170,90,.3);border-radius:100px;padding:5px 12px;font-size:13px;color:var(--fern)}
+.con-badge{display:inline-flex;align-items:center;gap:7px;padding:7px 15px;border-radius:100px;font-family:'DM Mono',monospace;font-size:11px;margin-bottom:16px}
+.con-badge.stable{background:rgba(88,130,60,.15);border:1px solid rgba(120,170,90,.3);color:var(--fern)}
+.con-badge.vulnerable{background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);color:var(--amber)}
+.con-badge.endangered{background:rgba(196,80,42,.12);border:1px solid rgba(196,80,42,.3);color:#e88060}
+
+/* ═══════════════════════════════════════════════
+   MAP PAGE
+══════════════════════════════════════════════ */
+.map-page-wrap{display:flex;height:calc(100vh - 109px);position:relative}
+
+/* sidebar */
+.map-sidebar{width:360px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden}
+.sidebar-head{padding:20px 20px 14px;border-bottom:1px solid var(--border)}
+.sidebar-head h2{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--leaf);margin-bottom:4px}
+.sidebar-head p{font-size:12px;color:var(--muted)}
+
+/* controls */
+.map-controls{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:10px}
+.radius-row{display:flex;align-items:center;gap:10px}
+.radius-row label{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--sage);white-space:nowrap}
+.radius-select{flex:1;background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:7px 10px;color:var(--white);font-size:13px;outline:none;cursor:pointer}
+.radius-select:focus{border-color:var(--fern)}
+.locate-btn{width:100%;padding:11px;background:linear-gradient(135deg,var(--sage),var(--fern));
+  border:none;border-radius:var(--rbtn);font-size:14px;font-weight:600;color:var(--white);
+  cursor:pointer;transition:all .3s;display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 4px 18px rgba(88,130,60,.3)}
+.locate-btn:hover{transform:translateY(-1px);box-shadow:0 8px 28px rgba(88,130,60,.45)}
+.locate-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* plant list */
+.plant-list-wrap{flex:1;overflow-y:auto;padding:10px 12px;scrollbar-width:thin;scrollbar-color:var(--forest) transparent}
+.plant-list-wrap::-webkit-scrollbar{width:4px}
+.plant-list-wrap::-webkit-scrollbar-track{background:transparent}
+.plant-list-wrap::-webkit-scrollbar-thumb{background:var(--forest);border-radius:2px}
+
+.list-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:14px;color:var(--dim);text-align:center;padding:30px}
+.list-empty .e-icon{font-size:44px}
+.list-empty p{font-size:13px;line-height:1.7}
+
+.list-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:14px;color:var(--muted)}
+.list-loading .spin{font-size:36px;animation:rotate 1.5s linear infinite}
+.list-loading p{font-size:13px}
+
+.plant-card{background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:13px 14px;margin-bottom:8px;cursor:pointer;transition:all .22s}
+.plant-card:hover,.plant-card.active{border-color:var(--fern);background:rgba(40,60,36,.8)}
+.plant-card.active{box-shadow:0 0 0 1px var(--fern)}
+.pc-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:6px}
+.pc-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  font-size:18px;flex-shrink:0;background:rgba(88,130,60,.15)}
+.pc-name{font-size:14px;font-weight:600;color:var(--leaf);line-height:1.3;flex:1}
+.pc-dist{font-family:'DM Mono',monospace;font-size:10px;color:var(--sage);margin-top:2px}
+.pc-meta{display:flex;flex-wrap:wrap;gap:5px}
+.pc-tag{background:rgba(88,130,60,.12);border:1px solid rgba(120,170,90,.2);border-radius:20px;
+  padding:3px 9px;font-size:11px;color:var(--fern)}
+.pc-plant-tag{background:rgba(46,74,40,.4);border:1px solid rgba(120,170,90,.15);border-radius:20px;
+  padding:3px 9px;font-size:11px;color:var(--leaf)}
+
+/* detail popup in sidebar */
+.plant-detail{display:none;border-top:1px solid var(--border);background:var(--card2);overflow-y:auto;max-height:260px}
+.plant-detail.show{display:block}
+.pd-head{padding:16px 18px 10px;border-bottom:1px solid var(--border)}
+.pd-name{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--leaf);margin-bottom:3px}
+.pd-type{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--sage)}
+.pd-body{padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+.pd-row{display:flex;gap:8px;align-items:flex-start}
+.pd-row-icon{font-size:15px;flex-shrink:0;margin-top:1px}
+.pd-row-text{font-size:13px;color:var(--muted);line-height:1.6}
+.pd-plants{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.pd-close{display:flex;align-items:center;gap:6px;margin:0 18px 14px;padding:8px;border:1px solid var(--border);
+  border-radius:8px;background:transparent;color:var(--muted);font-size:12px;cursor:pointer;justify-content:center;transition:all .2s}
+.pd-close:hover{background:var(--forest);color:var(--white)}
+
+/* directions btn */
+.dir-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:9px;
+  background:var(--sage);border:none;border-radius:8px;font-size:13px;font-weight:600;
+  color:var(--white);cursor:pointer;text-decoration:none;transition:all .2s;margin-top:2px}
+.dir-btn:hover{background:var(--fern)}
+
+/* map container */
+.map-container{flex:1;position:relative}
+#leafletMap{width:100%;height:100%}
+
+/* leaflet overrides */
+.leaflet-popup-content-wrapper{background:var(--card) !important;border:1px solid var(--borderh) !important;
+  border-radius:12px !important;box-shadow:0 8px 32px rgba(0,0,0,.5) !important;color:var(--white) !important}
+.leaflet-popup-tip{background:var(--card) !important}
+.leaflet-popup-content{margin:14px 16px !important;font-family:'Nunito Sans',sans-serif}
+.leaflet-container{background:#162016}
+.leaflet-control-zoom a{background:var(--card) !important;color:var(--fern) !important;border-color:var(--border) !important}
+.leaflet-control-zoom a:hover{background:var(--forest) !important}
+.leaflet-control-attribution{background:rgba(15,26,15,.8) !important;color:var(--dim) !important;font-size:9px}
+.leaflet-control-attribution a{color:var(--sage) !important}
+
+/* map legend */
+.map-legend{position:absolute;bottom:24px;right:16px;z-index:1000;background:rgba(22,32,22,.92);
+  border:1px solid var(--border);border-radius:12px;padding:12px 16px;backdrop-filter:blur(10px)}
+.legend-title{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--sage);margin-bottom:10px}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:5px}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* user marker */
+.user-marker{width:18px;height:18px;background:var(--fern);border:3px solid var(--white);border-radius:50%;
+  box-shadow:0 0 0 4px rgba(88,130,60,.3)}
+
+/* map overlay msg */
+.map-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:rgba(22,32,22,.92);border:1px solid var(--border);border-radius:14px;
+  padding:24px 32px;text-align:center;z-index:999;backdrop-filter:blur(10px)}
+.map-msg .mm-icon{font-size:40px;margin-bottom:10px;display:block}
+.map-msg p{font-size:14px;color:var(--muted);line-height:1.6}
+
+/* count badge */
+.count-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(88,130,60,.15);
+  border:1px solid rgba(120,170,90,.3);border-radius:100px;padding:4px 12px;
+  font-family:'DM Mono',monospace;font-size:11px;color:var(--fern);margin-top:6px}
+
+/* FOOTER */
+footer{position:relative;z-index:5;text-align:center;padding:24px 20px;border-top:1px solid var(--border);
+  font-family:'DM Mono',monospace;font-size:10px;letter-spacing:1px;color:var(--dim)}
+footer span{color:var(--sage)}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  header{padding:14px 18px}
+  .nav-bar{padding:0 18px}
+  .nav-tab{padding:12px 16px;font-size:13px}
+  .map-page-wrap{flex-direction:column;height:auto}
+  .map-sidebar{width:100%;height:auto;border-right:none;border-bottom:1px solid var(--border)}
+  .map-container{height:55vh}
+  .plant-list-wrap{max-height:240px}
+  .plant-detail{max-height:200px}
+  .card-wrap{padding:0 12px 50px}
+  .panel,.rpanel{padding:18px 14px}
+  .analyze-wrap{padding:12px 14px 16px}
+  .plant-cn{font-size:26px}
+  .igrid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+<div class="bg-grid"></div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">🌿</div>
+    <div>
+      <div class="logo-name">Vana<span>Vaidya</span></div>
+      <div class="logo-tag">AI Medicinal Plant Finder</div>
+    </div>
+  </div>
+  <div class="h-pill"><div class="pill-dot"></div>Groq Llama-4 Vision · FREE</div>
+</header>
+
+<!-- NAV -->
+<nav class="nav-bar">
+  <button class="nav-tab active" onclick="switchPage('scanner', this)">🔬 Plant Scanner</button>
+  <button class="nav-tab" onclick="switchPage('map', this)">🗺️ Nearby Plants Map</button>
+</nav>
+
+<!-- ══════════════ SCANNER PAGE ══════════════ -->
+<div class="page active" id="page-scanner">
+  <div class="hero">
+    <div class="hero-eye">Ayurveda · Siddha · Unani · 5000+ Species</div>
+    <h1>Identify <em>Medicinal</em><br>Plants Instantly</h1>
+    <p class="hero-sub">Photograph any plant. Our AI reveals centuries of traditional Indian healing wisdom.</p>
+  </div>
+
+  <div class="card-wrap">
+    <div class="main-card">
+      <!-- Input tabs -->
+      <div class="itabs">
+        <button class="itab active" onclick="switchTab('upload',this)">📤 Upload</button>
+        <button class="itab" onclick="switchTab('camera',this)">📷 Camera</button>
+      </div>
+
+      <!-- Upload -->
+      <div class="panel active" id="panel-upload">
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="fileInput" accept="image/*" onchange="onFileSelect(event)">
+          <span class="drop-icon">🌱</span>
+          <div class="drop-h">Drop your plant photo here</div>
+          <p class="drop-p">or <a>click to browse</a> · JPG, PNG, WEBP up to 10MB</p>
+        </div>
+        <div class="img-preview" id="imgPreview">
+          <div class="preview-frame">
+            <img id="prevImg" src="" alt="Plant">
+            <div class="prev-actions">
+              <button class="prev-btn" onclick="clearImage()">✕ Remove</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Camera -->
+      <div class="panel" id="panel-camera">
+        <div class="cam-placeholder" id="camPlaceholder">
+          <span style="font-size:48px">📷</span>
+          <p>Point your camera at a medicinal plant</p>
+          <button class="start-btn" onclick="startCam()">▶ Start Camera</button>
+        </div>
+        <div class="cam-active" id="camActive">
+          <div class="cam-frame">
+            <video id="camFeed" autoplay playsinline muted></video>
+            <canvas id="captureCanvas"></canvas>
+            <div class="vf">
+              <div class="vfc vf-tl"></div><div class="vfc vf-tr"></div>
+              <div class="vfc vf-bl"></div><div class="vfc vf-br"></div>
+            </div>
+            <div class="cam-controls">
+              <button class="ctrl-btn" onclick="stopCam()">✕ Stop</button>
+              <button class="shutter" onclick="snapPhoto()">📸</button>
+              <button class="ctrl-btn" onclick="flipCam()">🔄 Flip</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Analyze -->
+      <div class="analyze-wrap">
+        <button class="analyze-btn" id="analyzeBtn" onclick="analyze()" disabled>🔬 Analyze Plant</button>
+      </div>
+
+      <!-- Loading -->
+      <div class="loading-section" id="loadingSection">
+        <div class="l-title">Consulting the botanical oracle…</div>
+        <div class="steps">
+          <div class="step" id="s1"><div class="step-node">◐</div><span>Processing image with computer vision</span></div>
+          <div class="step" id="s2"><div class="step-node">◐</div><span>Identifying species from morphological features</span></div>
+          <div class="step" id="s3"><div class="step-node">◐</div><span>Querying Ayurvedic & Siddha knowledge base</span></div>
+          <div class="step" id="s4"><div class="step-node">◐</div><span>Compiling medicinal benefits & safety data</span></div>
+        </div>
+        <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+      </div>
+
+      <!-- Error -->
+      <div class="error-section" id="errorSection">
+        <div class="error-box">
+          <div class="e-ico">⚠️</div>
+          <div><div class="e-head">Analysis Failed</div><div class="e-body" id="errMsg"></div></div>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div class="results-section" id="resultsSection">
+        <div class="plant-header">
+          <div>
+            <div class="plant-cn" id="r-cn">—</div>
+            <div class="plant-sn" id="r-sn">—</div>
+            <div class="plant-fam" id="r-fam">—</div>
+          </div>
+          <div class="conf-badge" id="r-conf">—% match</div>
+        </div>
+        <div class="rtab-bar">
+          <button class="rtab active" onclick="switchRTab('overview',this)">Overview</button>
+          <button class="rtab" onclick="switchRTab('benefits',this)">Benefits</button>
+          <button class="rtab" onclick="switchRTab('preparation',this)">Preparation</button>
+          <button class="rtab" onclick="switchRTab('conservation',this)">Conservation</button>
+        </div>
+        <div class="rpanel active" id="rp-overview">
+          <div class="igrid" id="r-overview-grid"></div>
+          <div class="warn-box" id="r-contra" style="display:none">
+            <span class="w-ico">⚠️</span>
+            <div class="w-body"><strong>Contraindications & Warnings</strong><span id="r-contra-text"></span></div>
+          </div>
+        </div>
+        <div class="rpanel" id="rp-benefits">
+          <div class="blist" id="r-benefits"></div>
+          <div class="warn-box" style="margin-top:14px">
+            <span class="w-ico">🩺</span>
+            <div class="w-body"><strong>Medical Disclaimer</strong>For educational purposes only. Consult a qualified Ayurvedic practitioner or healthcare provider before using any medicinal plant.</div>
+          </div>
+        </div>
+        <div class="rpanel" id="rp-preparation">
+          <div class="icard" style="margin-bottom:12px">
+            <div class="icard-label">Parts Used</div>
+            <div class="tags" id="r-parts"></div>
+          </div>
+          <div class="blist" id="r-preps"></div>
+        </div>
+        <div class="rpanel" id="rp-conservation">
+          <div id="r-con-badge"></div>
+          <div class="igrid" id="r-con-grid"></div>
+          <div class="blist" id="r-con-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MAP PAGE ══════════════ -->
+<div class="page" id="page-map">
+  <div class="map-page-wrap">
+
+    <!-- SIDEBAR -->
+    <div class="map-sidebar">
+      <div class="sidebar-head">
+        <h2>🌿 Nearby Plants</h2>
+        <p>Medicinal plant gardens, forests & sites near you</p>
+        <div id="countBadge" style="display:none" class="count-badge"></div>
+      </div>
+
+      <div class="map-controls">
+        <div class="radius-row">
+          <label>Search Radius</label>
+          <select class="radius-select" id="radiusSelect">
+            <option value="5000">5 km</option>
+            <option value="10000" selected>10 km</option>
+            <option value="25000">25 km</option>
+            <option value="50000">50 km</option>
+          </select>
+        </div>
+        <button class="locate-btn" id="locateBtn" onclick="findNearbyPlants()">
+          📍 Find Plants Near Me
+        </button>
+      </div>
+
+      <!-- Plant list -->
+      <div class="plant-list-wrap" id="plantListWrap">
+        <div class="list-empty" id="listEmpty">
+          <div class="e-icon">🗺️</div>
+          <p>Click "Find Plants Near Me" to discover medicinal plant locations in your area.</p>
+        </div>
+        <div class="list-loading" id="listLoading" style="display:none">
+          <div class="spin">🌿</div>
+          <p>Searching for nearby medicinal plants…</p>
+        </div>
+        <div id="plantCards"></div>
+      </div>
+
+      <!-- Plant detail panel -->
+      <div class="plant-detail" id="plantDetail">
+        <div class="pd-head">
+          <div class="pd-name" id="pd-name">—</div>
+          <div class="pd-type" id="pd-type">—</div>
+        </div>
+        <div class="pd-body">
+          <div class="pd-row" id="pd-dist-row" style="display:none">
+            <span class="pd-row-icon">📏</span>
+            <div class="pd-row-text" id="pd-dist"></div>
+          </div>
+          <div class="pd-row" id="pd-addr-row" style="display:none">
+            <span class="pd-row-icon">📍</span>
+            <div class="pd-row-text" id="pd-addr"></div>
+          </div>
+          <div class="pd-row" id="pd-plants-row" style="display:none">
+            <span class="pd-row-icon">🌿</span>
+            <div>
+              <div class="pd-row-text" style="margin-bottom:5px">Known medicinal plants:</div>
+              <div class="pd-plants" id="pd-plants"></div>
+            </div>
+          </div>
+          <div class="pd-row" id="pd-hours-row" style="display:none">
+            <span class="pd-row-icon">🕐</span>
+            <div class="pd-row-text" id="pd-hours"></div>
+          </div>
+          <a id="pd-directions" href="#" target="_blank" class="dir-btn">🧭 Open in Maps</a>
+        </div>
+        <button class="pd-close" onclick="closePlantDetail()">↑ Close details</button>
+      </div>
+    </div>
+
+    <!-- MAP -->
+    <div class="map-container">
+      <div id="leafletMap"></div>
+      <div class="map-msg" id="mapMsg">
+        <span class="mm-icon">🌿</span>
+        <p>Allow location access and click<br><strong style="color:var(--fern)">"Find Plants Near Me"</strong><br>to discover nearby medicinal plant sites</p>
+      </div>
+      <!-- Legend -->
+      <div class="map-legend">
+        <div class="legend-title">Map Legend</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#5a7a48"></div>Herb Garden</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#3a7a50"></div>Botanical Garden</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2d5a3d"></div>Forest Reserve</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#7a4a30"></div>Herbalist / Shop</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#88b060"></div>You are here</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>VanaVaidya &nbsp;·&nbsp; <span>Indian Medicinal Heritage</span> &nbsp;·&nbsp; Powered by Groq Llama-4 Scout (Free) · OpenStreetMap &nbsp;·&nbsp; For Educational Use Only</footer>
+
+<script>
+// ════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════
+let imageData = null, imageIsFile = false;
+let camStream = null, facing = 'environment';
+let leafletMap = null, userMarker = null, plantMarkers = [];
+let activeCard = null;
+const API_BASE = window.location.origin;
+
+// ════════════════════════════════════════════════════
+//  PAGE NAVIGATION
+// ════════════════════════════════════════════════════
+function switchPage(name, btn) {
+  document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('page-' + name).classList.add('active');
+  if (name === 'map' && !leafletMap) initMap();
+}
+
+// ════════════════════════════════════════════════════
+//  SCANNER — INPUT TABS
+// ════════════════════════════════════════════════════
+function switchTab(name, btn) {
+  document.querySelectorAll('.itab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+}
+
+function switchRTab(name, btn) {
+  document.querySelectorAll('.rtab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.rpanel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('rp-' + name).classList.add('active');
+}
+
+// ════════════════════════════════════════════════════
+//  SCANNER — FILE UPLOAD
+// ════════════════════════════════════════════════════
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) loadFile(f);
+});
+
+function onFileSelect(e) { const f = e.target.files[0]; if (f) loadFile(f); }
+
+function loadFile(file) {
+  imageIsFile = true; imageData = file;
+  document.getElementById('prevImg').src = URL.createObjectURL(file);
+  document.getElementById('imgPreview').classList.add('show');
+  dropZone.style.display = 'none';
+  document.getElementById('analyzeBtn').disabled = false;
+  resetResults();
+}
+
+function clearImage() {
+  imageData = null; imageIsFile = false;
+  document.getElementById('imgPreview').classList.remove('show');
+  dropZone.style.display = '';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('analyzeBtn').disabled = true;
+  resetResults();
+}
+
+// ════════════════════════════════════════════════════
+//  SCANNER — CAMERA
+// ════════════════════════════════════════════════════
+async function startCam() {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } });
+    document.getElementById('camFeed').srcObject = camStream;
+    document.getElementById('camPlaceholder').style.display = 'none';
+    document.getElementById('camActive').classList.add('show');
+  } catch(e) { alert('Camera unavailable: ' + e.message); }
+}
+
+function stopCam() {
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  document.getElementById('camActive').classList.remove('show');
+  document.getElementById('camPlaceholder').style.display = 'flex';
+}
+
+async function flipCam() { facing = facing === 'environment' ? 'user' : 'environment'; stopCam(); await startCam(); }
+
+function snapPhoto() {
+  const vid = document.getElementById('camFeed');
+  const cvs = document.getElementById('captureCanvas');
+  cvs.width = vid.videoWidth; cvs.height = vid.videoHeight;
+  cvs.getContext('2d').drawImage(vid, 0, 0);
+  imageData = cvs.toDataURL('image/jpeg', 0.92);
+  imageIsFile = false;
+  document.getElementById('prevImg').src = imageData;
+  document.getElementById('imgPreview').classList.add('show');
+  stopCam();
+  switchTab('upload', document.querySelectorAll('.itab')[0]);
+  dropZone.style.display = 'none';
+  document.getElementById('analyzeBtn').disabled = false;
+  resetResults();
+}
+
+// ════════════════════════════════════════════════════
+//  SCANNER — ANALYSIS
+// ════════════════════════════════════════════════════
+function resetResults() {
+  document.getElementById('resultsSection').classList.remove('show');
+  document.getElementById('loadingSection').classList.remove('show');
+  document.getElementById('errorSection').classList.remove('show');
+  document.getElementById('progFill').style.width = '0%';
+  ['s1','s2','s3','s4'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('active','done');
+    el.querySelector('.step-node').textContent = '◐';
+  });
+}
+
+async function analyze() {
+  if (!imageData) return;
+  resetResults();
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('loadingSection').classList.add('show');
+
+  const sids = ['s1','s2','s3','s4'];
+  const times = [0, 1400, 2900, 4400];
+  const progs = [18, 42, 68, 88];
+  sids.forEach((sid, i) => {
+    setTimeout(() => {
+      if (i > 0) { const p = document.getElementById(sids[i-1]); p.classList.remove('active'); p.classList.add('done'); p.querySelector('.step-node').textContent = '✓'; }
+      document.getElementById(sid).classList.add('active');
+      document.getElementById('progFill').style.width = progs[i] + '%';
+    }, times[i]);
+  });
+
+  try {
+    let response;
+    if (imageIsFile) {
+      const fd = new FormData(); fd.append('image', imageData);
+      response = await fetch(`${API_BASE}/api/analyze`, { method: 'POST', body: fd });
+    } else {
+      response = await fetch(`${API_BASE}/api/analyze`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: imageData }),
+      });
+    }
+    const result = await response.json();
+    const last = document.getElementById(sids[sids.length-1]);
+    last.classList.remove('active'); last.classList.add('done'); last.querySelector('.step-node').textContent = '✓';
+    document.getElementById('progFill').style.width = '100%';
+    if (!result.success) throw new Error(result.error || 'Server error');
+    setTimeout(() => { document.getElementById('loadingSection').classList.remove('show'); renderResults(result.data); }, 450);
+  } catch(err) {
+    document.getElementById('loadingSection').classList.remove('show');
+    document.getElementById('errorSection').classList.add('show');
+    document.getElementById('errMsg').textContent = err.message || 'Unexpected error. Please try again.';
+  } finally {
+    document.getElementById('analyzeBtn').disabled = false;
+  }
+}
+
+function renderResults(p) {
+  document.getElementById('r-cn').textContent   = p.common_name    || '—';
+  document.getElementById('r-sn').textContent   = p.scientific_name || '—';
+  document.getElementById('r-fam').textContent  = ((p.family || '—')).toUpperCase() + ' FAMILY';
+  document.getElementById('r-conf').textContent = (p.confidence || '—') + '% match';
+
+  const og = document.getElementById('r-overview-grid'); og.innerHTML = '';
+  [['Traditional System',p.traditional_system],['Hindi Name',p.hindi_name],['Tamil Name',p.tamil_name],
+   ['Active Compounds',p.active_compounds],['Natural Habitat',p.habitat],['Overview',p.overview]]
+  .filter(([,v]) => v).forEach(([l,v]) => og.innerHTML += `<div class="icard"><div class="icard-label">${l}</div><div class="icard-value">${v}</div></div>`);
+
+  const cb = document.getElementById('r-contra');
+  if (p.contraindications && !/none|n\/a/i.test(p.contraindications)) {
+    document.getElementById('r-contra-text').textContent = p.contraindications; cb.style.display = 'flex';
+  } else cb.style.display = 'none';
+
+  const bl = document.getElementById('r-benefits'); bl.innerHTML = '';
+  (p.benefits||[]).forEach(b => bl.innerHTML += `<div class="bitem"><div class="b-icon">${b.icon||'🌿'}</div><div><div class="b-title">${b.title}</div><div class="b-desc">${b.description}</div></div></div>`);
+
+  document.getElementById('r-parts').innerHTML = (p.parts_used||['—']).map(x=>`<span class="tag">${x}</span>`).join('');
+
+  const pl = document.getElementById('r-preps'); pl.innerHTML = '';
+  (p.preparations||[]).forEach(pr => pl.innerHTML += `<div class="bitem"><div class="b-icon">${pr.icon||'🌿'}</div><div><div class="b-title">${pr.title}</div><div class="b-desc">${pr.description}</div></div></div>`);
+  if (p.dosage) pl.innerHTML += `<div class="bitem"><div class="b-icon">⚖️</div><div><div class="b-title">Recommended Dosage</div><div class="b-desc">${p.dosage}</div></div></div>`;
+  if (p.drug_interactions) pl.innerHTML += `<div class="bitem"><div class="b-icon">💊</div><div><div class="b-title">Drug Interactions</div><div class="b-desc">${p.drug_interactions}</div></div></div>`;
+
+  const s = (p.conservation_status||'Stable').toLowerCase();
+  let cls = s.includes('vulnerable')?'vulnerable':s.includes('endangered')?'endangered':'stable';
+  document.getElementById('r-con-badge').innerHTML = `<div class="con-badge ${cls}">🌍 ${p.conservation_status||'Stable'}</div>`;
+  const cg = document.getElementById('r-con-grid'); cg.innerHTML = '';
+  [['Harvest Guidelines',p.harvest_tips],['AYUSH / Regulatory',p.regulatory_note],['Drug Interactions',p.drug_interactions]]
+  .filter(([,v])=>v).forEach(([l,v]) => cg.innerHTML += `<div class="icard"><div class="icard-label">${l}</div><div class="icard-value">${v}</div></div>`);
+
+  document.getElementById('resultsSection').classList.add('show');
+  switchRTab('overview', document.querySelector('.rtab'));
+  document.getElementById('resultsSection').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+// ════════════════════════════════════════════════════
+//  MAP — INIT LEAFLET
+// ════════════════════════════════════════════════════
+function initMap() {
+  leafletMap = L.map('leafletMap', {
+    center: [20.5937, 78.9629], // India center
+    zoom: 5,
+    zoomControl: true,
+  });
+
+  // Dark-themed tile layer using CartoDB Dark Matter
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd', maxZoom: 19,
+  }).addTo(leafletMap);
+
+  document.getElementById('mapMsg').style.display = 'block';
+}
+
+// ════════════════════════════════════════════════════
+//  MAP — FIND NEARBY PLANTS
+// ════════════════════════════════════════════════════
+async function findNearbyPlants() {
+  const btn = document.getElementById('locateBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Locating you…';
+  document.getElementById('listLoading').style.display = 'flex';
+  document.getElementById('listEmpty').style.display = 'none';
+  document.getElementById('plantCards').innerHTML = '';
+  closePlantDetail();
+  document.getElementById('mapMsg').style.display = 'none';
+
+  try {
+    // Get user geolocation
+    const pos = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 15000, enableHighAccuracy: true })
+    );
+
+    const { latitude: lat, longitude: lon } = pos.coords;
+    const radius = document.getElementById('radiusSelect').value;
+
+    // Centre map on user
+    leafletMap.setView([lat, lon], 13);
+
+    // Add user location marker
+    if (userMarker) leafletMap.removeLayer(userMarker);
+    const userIcon = L.divIcon({ className:'', html:'<div class="user-marker"></div>', iconSize:[18,18], iconAnchor:[9,9] });
+    userMarker = L.marker([lat, lon], { icon: userIcon })
+      .addTo(leafletMap)
+      .bindPopup('<strong style="color:#b4d490">📍 You are here</strong>');
+
+    // Add search circle
+    if (window._searchCircle) leafletMap.removeLayer(window._searchCircle);
+    window._searchCircle = L.circle([lat, lon], {
+      radius: parseInt(radius), color:'#88b060', fillColor:'#88b060',
+      fillOpacity:0.04, weight:1, dashArray:'6,6',
+    }).addTo(leafletMap);
+
+    btn.textContent = '🔍 Searching plants…';
+
+    // Fetch from backend
+    const res = await fetch(`${API_BASE}/api/nearby-plants?lat=${lat}&lon=${lon}&radius=${radius}`);
+    const data = await res.json();
+
+    document.getElementById('listLoading').style.display = 'none';
+
+    if (!data.success || !data.plants.length) {
+      document.getElementById('listEmpty').style.display = 'flex';
+      document.getElementById('listEmpty').innerHTML = `<div class="e-icon">🔍</div><p>No medicinal plant sites found within ${parseInt(radius)/1000} km. Try a larger radius.</p>`;
+      return;
+    }
+
+    // Update count badge
+    const badge = document.getElementById('countBadge');
+    badge.style.display = 'inline-flex';
+    badge.textContent = `🌿 ${data.plants.length} sites found`;
+
+    // Clear old markers
+    plantMarkers.forEach(m => leafletMap.removeLayer(m));
+    plantMarkers = [];
+
+    // Render markers + cards
+    data.plants.forEach((plant, idx) => {
+      const meta = getTypeMeta(plant.type);
+      const marker = createPlantMarker(plant, meta, idx);
+      marker.addTo(leafletMap);
+      plantMarkers.push(marker);
+      renderPlantCard(plant, meta, idx, marker);
+    });
+
+    // Fit map to markers
+    if (plantMarkers.length > 0) {
+      const group = L.featureGroup([userMarker, ...plantMarkers]);
+      leafletMap.fitBounds(group.getBounds().pad(0.15));
+    }
+
+  } catch(err) {
+    document.getElementById('listLoading').style.display = 'none';
+    if (err.code === 1) {
+      document.getElementById('listEmpty').style.display = 'flex';
+      document.getElementById('listEmpty').innerHTML = `<div class="e-icon">🔒</div><p>Location access denied. Please allow location permission in your browser to find nearby plants.</p>`;
+    } else {
+      document.getElementById('listEmpty').style.display = 'flex';
+      document.getElementById('listEmpty').innerHTML = `<div class="e-icon">⚠️</div><p>${err.message||'Could not find nearby plants. Please try again.'}</p>`;
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📍 Find Plants Near Me';
+  }
+}
+
+function getTypeMeta(type) {
+  const map = {
+    herb_garden:      { icon:'🌿', label:'Herb Garden',      color:'#5a7a48' },
+    botanical_garden: { icon:'🌳', label:'Botanical Garden', color:'#3a7a50' },
+    nature_trail:     { icon:'🥾', label:'Nature Trail',     color:'#7a6a30' },
+    forest:           { icon:'🌲', label:'Forest Reserve',   color:'#2d5a3d' },
+    research_garden:  { icon:'🔬', label:'Research Garden',  color:'#4a5a78' },
+    herbalist:        { icon:'⚗️',  label:'Herbalist',       color:'#7a4a30' },
+  };
+  return map[type] || { icon:'📍', label:'Medicinal Site', color:'#5a4878' };
+}
+
+function createPlantMarker(plant, meta, idx) {
+  const svgIcon = L.divIcon({
+    className: '',
+    html: `<div style="
+      width:36px;height:36px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+      background:${meta.color};border:2px solid rgba(255,255,255,0.35);
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 4px 12px rgba(0,0,0,0.45);cursor:pointer;
+      transition:transform .2s;
+    "><span style="transform:rotate(45deg);font-size:16px;display:block;line-height:1">${meta.icon}</span></div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 36],
+    popupAnchor: [0, -38],
+  });
+
+  const distStr = plant.distance < 1
+    ? `${Math.round(plant.distance * 1000)} m away`
+    : `${plant.distance.toFixed(1)} km away`;
+
+  const plantsHtml = plant.plants && plant.plants.length
+    ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${plant.plants.map(p=>`<span style="background:rgba(88,130,60,.15);border:1px solid rgba(88,130,60,.3);border-radius:20px;padding:2px 8px;font-size:11px;color:#88b060">${p}</span>`).join('')}</div>`
+    : '';
+
+  const popup = `
+    <div style="min-width:180px">
+      <div style="font-size:13px;font-weight:700;color:#b4d490;margin-bottom:3px">${meta.icon} ${plant.name}</div>
+      <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#5a7a48;margin-bottom:6px">${meta.label}</div>
+      <div style="font-size:12px;color:rgba(244,241,235,.6);margin-bottom:3px">📏 ${distStr}</div>
+      ${plant.address ? `<div style="font-size:12px;color:rgba(244,241,235,.5)">📍 ${plant.address}</div>` : ''}
+      ${plantsHtml}
+    </div>`;
+
+  const marker = L.marker([plant.lat, plant.lon], { icon: svgIcon });
+  marker.bindPopup(popup);
+  marker.on('click', () => showPlantDetail(plant, meta, idx));
+  return marker;
+}
+
+function renderPlantCard(plant, meta, idx, marker) {
+  const distStr = plant.distance < 1
+    ? `${Math.round(plant.distance * 1000)} m away`
+    : `${plant.distance.toFixed(1)} km away`;
+
+  const plantsHtml = plant.plants && plant.plants.length
+    ? plant.plants.slice(0,4).map(p=>`<span class="pc-plant-tag">${p}</span>`).join('')
+    : '';
+
+  const card = document.createElement('div');
+  card.className = 'plant-card';
+  card.id = `card-${idx}`;
+  card.innerHTML = `
+    <div class="pc-top">
+      <div class="pc-icon" style="background:rgba(${hexToRgb(meta.color)},0.2)">${meta.icon}</div>
+      <div style="flex:1">
+        <div class="pc-name">${plant.name}</div>
+        <div class="pc-dist">📏 ${distStr} &nbsp;·&nbsp; ${meta.label}</div>
+      </div>
+    </div>
+    <div class="pc-meta">
+      ${plant.source === 'curated' ? '<span class="pc-tag">📚 Verified</span>' : '<span class="pc-tag">🗺️ OSM</span>'}
+      ${plantsHtml}
+    </div>`;
+
+  card.addEventListener('click', () => {
+    if (activeCard) activeCard.classList.remove('active');
+    card.classList.add('active');
+    activeCard = card;
+    leafletMap.setView([plant.lat, plant.lon], 15, { animate: true });
+    marker.openPopup();
+    showPlantDetail(plant, meta, idx);
+  });
+
+  document.getElementById('plantCards').appendChild(card);
+}
+
+function showPlantDetail(plant, meta, idx) {
+  const distStr = plant.distance < 1
+    ? `${Math.round(plant.distance * 1000)} m away`
+    : `${plant.distance.toFixed(1)} km away`;
+
+  document.getElementById('pd-name').textContent = plant.name;
+  document.getElementById('pd-type').textContent = meta.icon + ' ' + meta.label;
+
+  const distRow = document.getElementById('pd-dist-row');
+  distRow.style.display = 'flex';
+  document.getElementById('pd-dist').textContent = distStr;
+
+  const addrRow = document.getElementById('pd-addr-row');
+  if (plant.address) { addrRow.style.display = 'flex'; document.getElementById('pd-addr').textContent = plant.address; }
+  else addrRow.style.display = 'none';
+
+  const plantsRow = document.getElementById('pd-plants-row');
+  if (plant.plants && plant.plants.length) {
+    plantsRow.style.display = 'flex';
+    document.getElementById('pd-plants').innerHTML = plant.plants.map(p=>`<span class="tag" style="font-size:11px;padding:3px 9px">${p}</span>`).join('');
+  } else plantsRow.style.display = 'none';
+
+  const hoursRow = document.getElementById('pd-hours-row');
+  if (plant.openingHours) { hoursRow.style.display = 'flex'; document.getElementById('pd-hours').textContent = plant.openingHours; }
+  else hoursRow.style.display = 'none';
+
+  document.getElementById('pd-directions').href =
+    `https://www.google.com/maps/dir/?api=1&destination=${plant.lat},${plant.lon}`;
+
+  document.getElementById('plantDetail').classList.add('show');
+
+  // Highlight card
+  const card = document.getElementById(`card-${idx}`);
+  if (card) { if (activeCard) activeCard.classList.remove('active'); card.classList.add('active'); activeCard = card; card.scrollIntoView({ behavior:'smooth', block:'nearest' }); }
+}
+
+function closePlantDetail() {
+  document.getElementById('plantDetail').classList.remove('show');
+  if (activeCard) { activeCard.classList.remove('active'); activeCard = null; }
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+</script>
+</body>
+</html>
